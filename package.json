@@ -1,0 +1,24 @@
+{
+  "name": "pokekanjistrings",
+  "version": "1.0.0",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/louismollick/PokeKanjiStrings.git"
+  },
+  "author": "louismollick",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/louismollick/PokeKanjiStrings/issues"
+  },
+  "homepage": "https://github.com/louismollick/PokeKanjiStrings#readme",
+  "description": "",
+  "devDependencies": {
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}
