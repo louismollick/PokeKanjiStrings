@@ -314,7 +314,7 @@ function main(): void {
   // Step 2: Read XML
   console.log('Step 2: Reading XML...');
   const xmlContent = fs.readFileSync(DUMP_XML_PATH, 'utf-8');
-  const xmlLines = xmlContent.split('\n');
+  const xmlLines = xmlContent.split(/\r?\n/);
   console.log(`  XML lines: ${xmlLines.length}\n`);
 
   // Step 3: Parse XML strings with Kana

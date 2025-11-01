@@ -2,7 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import Ollama from 'ollama';
+import { Ollama } from 'ollama';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // ES module compatibility
 const __filename = fileURLToPath(import.meta.url);
@@ -13,9 +14,21 @@ const LOGS_DIR = path.join(__dirname, '../logs');
 const OUTPUT_XML_PATH = path.join(__dirname, '../strings/kanji/kanji_strings_sinnoh_ja.xml');
 const PROMPT_TEMPLATE_PATH = path.join(__dirname, 'prompt_template.txt');
 
+// Configuration - check command line args
+const USE_GEMINI = process.argv.includes('--gemini');
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+if (!GEMINI_API_KEY) {
+  console.error('Error: GEMINI_API_KEY environment variable is not set');
+  process.exit(1);
+}
+
 // Ollama configuration
 const ollama = new Ollama({ host: 'http://localhost:11434' });
-const MODEL_NAME = 'qwen2.5:7b-instruct-q4_K_M';
+const OLLAMA_MODEL = 'qwen2.5:7b-instruct-q4_K_M';
+
+// Gemini configuration
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+const GEMINI_MODEL = 'gemini-2.5-flash';
 
 /**
  * Find the most recent file matching a pattern
@@ -54,13 +67,15 @@ function parseNoMatchFile(filePath: string): { lineNum: number, text: string }[]
 }
 
 /**
- * Process batch with LLM
+ * Process batch with LLM (Ollama or Gemini)
  */
 async function processBatchWithLLM(
   batch: { lineNum: number, text: string }[],
-  systemPrompt: string
+  systemPrompt: string,
+  retryAttempt = 0
 ): Promise<Map<number, string>> {
   const results = new Map<number, string>();
+  const MAX_RETRIES = 3;
 
   // Format batch for LLM
   const batchInput = batch.map(item =>
@@ -76,18 +91,30 @@ OUTPUT (converted strings in same format):`;
   console.log(`  Processing batch of ${batch.length} strings...`);
 
   try {
-    const response = await ollama.generate({
-      model: MODEL_NAME,
-      prompt: fullPrompt,
-      options: {
-        temperature: 0.1,
-        num_gpu: 1,
-        num_thread: 8
-      }
-    });
+    let responseText: string;
+
+    if (USE_GEMINI) {
+      // Use Gemini API
+      const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+      const result = await model.generateContent(fullPrompt);
+      responseText = result.response.text();
+    } else {
+      // Use Ollama
+      const response = await ollama.generate({
+        model: OLLAMA_MODEL,
+        prompt: fullPrompt,
+        keep_alive:"30m",
+        options: {
+          temperature: 0.1,
+          num_ctx: 32768,
+          num_gpu: 99,
+          num_thread: 8
+        }
+      });
+      responseText = response.response;
+    }
 
     // Parse response
-    const responseText = response.response;
     const regex = /<string line="(\d+)">(.*?)<\/string>/g;
     let match;
 
@@ -97,10 +124,61 @@ OUTPUT (converted strings in same format):`;
       results.set(lineNum, convertedText);
     }
 
-    console.log(`  Parsed ${results.size} converted strings from LLM response`);
+    console.log(`  ✓ Parsed ${results.size}/${batch.length} converted strings from LLM response`);
+
+    // Print sample results (first 5)
+    if (results.size > 0) {
+      console.log(`\n  Sample conversions from this batch:`);
+      let count = 0;
+      for (const [lineNum, text] of results) {
+        if (count >= 5) break;
+        const original = batch.find(b => b.lineNum === lineNum)?.text || '';
+        console.log(`    Line ${lineNum}:`);
+        console.log(`      Before: ${original.substring(0, 80)}${original.length > 80 ? '...' : ''}`);
+        console.log(`      After:  ${text.substring(0, 80)}${text.length > 80 ? '...' : ''}`);
+        count++;
+      }
+      console.log('');
+    }
+
+    // Check for missing line numbers
+    const inputLineNums = new Set(batch.map(b => b.lineNum));
+    const outputLineNums = new Set(results.keys());
+    const missingLineNums = [...inputLineNums].filter(num => !outputLineNums.has(num));
+
+    if (missingLineNums.length > 0) {
+      console.log(`  ⚠️  Warning: ${missingLineNums.length} strings missing from response`);
+      
+      if (retryAttempt < MAX_RETRIES) {
+        console.log(`  🔄 Retrying missing strings (attempt ${retryAttempt + 1}/${MAX_RETRIES})...`);
+        
+        // Retry only the missing strings
+        const missingBatch = batch.filter(b => missingLineNums.includes(b.lineNum));
+        const retryResults = await processBatchWithLLM(missingBatch, systemPrompt, retryAttempt + 1);
+        
+        // Merge retry results
+        for (const [lineNum, text] of retryResults) {
+          results.set(lineNum, text);
+        }
+        
+        console.log(`  ✓ After retry: ${results.size}/${batch.length} strings converted`);
+      } else {
+        console.log(`  ❌ Max retries reached. ${missingLineNums.length} strings still missing.`);
+        console.log(`     Missing line numbers: ${missingLineNums.slice(0, 10).join(', ')}${missingLineNums.length > 10 ? '...' : ''}`);
+      }
+    }
 
   } catch (error) {
-    console.error(`  Error processing batch:`, error);
+    console.error(`  ❌ Error processing batch:`, error);
+    
+    // Retry the entire batch if it's a connection/API error
+    if (retryAttempt < MAX_RETRIES) {
+      console.log(`  🔄 Retrying entire batch (attempt ${retryAttempt + 1}/${MAX_RETRIES})...`);
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
+      return await processBatchWithLLM(batch, systemPrompt, retryAttempt + 1);
+    } else {
+      console.error(`  ❌ Max retries reached. Batch failed.`);
+    }
   }
 
   return results;
@@ -160,25 +238,44 @@ async function main() {
   const systemPrompt = fs.readFileSync(PROMPT_TEMPLATE_PATH, 'utf-8');
   console.log(`  Loaded ${entries.length} strings to convert\n`);
 
-  // Check if Ollama is running
-  console.log('Step 3: Checking Ollama connection...');
-  try {
-    await ollama.list();
-    console.log(`  ✓ Connected to Ollama at http://localhost:11434`);
-    console.log(`  Using model: ${MODEL_NAME}\n`);
-  } catch (error) {
-    console.error('Error: Could not connect to Ollama.');
-    console.error('Please ensure Ollama is running: https://ollama.com/');
-    console.error('And that the model is installed: ollama pull qwen2.5:7b-instruct-q4_K_M');
-    process.exit(1);
+  // Check connection based on selected provider
+  console.log(`Step 3: Checking ${USE_GEMINI ? 'Gemini' : 'Ollama'} connection...`);
+  if (USE_GEMINI) {
+    try {
+      // Test Gemini connection with a simple request
+      const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+      await model.generateContent('test');
+      console.log(`  ✓ Connected to Gemini API`);
+      console.log(`  Using model: ${GEMINI_MODEL}`);
+      console.log(`  Free tier limits: 10 RPM, 250 RPD\n`);
+    } catch (error) {
+      console.error('Error: Could not connect to Gemini API.');
+      console.error('Please check your API key.');
+      process.exit(1);
+    }
+  } else {
+    try {
+      await ollama.list();
+      console.log(`  ✓ Connected to Ollama at http://localhost:11434`);
+      console.log(`  Using model: ${OLLAMA_MODEL}\n`);
+    } catch (error) {
+      console.error('Error: Could not connect to Ollama.');
+      console.error('Please ensure Ollama is running: https://ollama.com/');
+      console.error('And that the model is installed: ollama pull qwen2.5:7b-instruct-q4_K_M');
+      process.exit(1);
+    }
   }
 
   // Process in batches
   console.log('Step 4: Processing with LLM...');
-  const BATCH_SIZE = 100;
+  // Gemini has much larger context window (~1M tokens) vs Ollama's 32K
+  const BATCH_SIZE = USE_GEMINI ? 500 : 200;
   const allConversions = new Map<number, string>();
 
   const totalBatches = Math.ceil(entries.length / BATCH_SIZE);
+
+  // Rate limiting for Gemini (10 RPM = 6 second delay between requests)
+  const GEMINI_DELAY_MS = USE_GEMINI ? 6000 : 0;
 
   for (let i = 0; i < entries.length; i += BATCH_SIZE) {
     const batch = entries.slice(i, Math.min(i + BATCH_SIZE, entries.length));
@@ -193,6 +290,12 @@ async function main() {
     }
 
     console.log(`  Total converted so far: ${allConversions.size}/${entries.length}`);
+
+    // Rate limiting for Gemini
+    if (USE_GEMINI && batchNum < totalBatches) {
+      console.log(`  Waiting 6 seconds (Gemini rate limit: 10 RPM)...`);
+      await new Promise(resolve => setTimeout(resolve, GEMINI_DELAY_MS));
+    }
   }
 
   // Update XML file
