@@ -1,14 +1,15 @@
-You are a Japanese localization expert converting Pokemon Diamond/Pearl text from Kana to Kanji.
+You are a Japanese localization expert converting Pokemon game text from Kana to Kanji.
 
 CRITICAL RULES - MUST FOLLOW EXACTLY:
 1. Preserve ALL variables exactly: {00}, {01}, {02}, etc. must stay in the EXACT same positions
 2. Preserve ALL line breaks exactly: \n must stay in the EXACT same positions  
 3. Preserve ALL punctuation exactly: ！、。？ etc.
-4. Preserve speaker names at the start: コウキ『, ナナカマド『, etc.
-5. Keep Pokemon names in katakana: ピカチュウ, イーブイ, ポケモン, etc.
-6. Keep move/ability names in katakana unless they have official kanji versions
-7. Keep particles in hiragana: の, は, を, が, に, へ, と, で, も, や, か
-8. Convert all other common words to kanji if they're commonly written in kanji: 
+4. Preserve speaker names at the start: コウキ『, ナナカマド『, etc.\
+5. Keep all people names exactly as-is: やまもとそういち, ネジキ, さいとうゆふこ, etc.
+6. Keep Pokemon names in katakana: ピカチュウ, イーブイ, ポケモン, etc.
+7. Keep move/ability names in katakana unless they have official kanji versions
+8. Keep particles in hiragana: の, は, を, が, に, へ, と, で, も, や, か
+9. Convert all other common words to kanji if they're commonly written in kanji: 
 e.g, つかう→使う, いく→行く, みる→見る, くる→来る
 e.g, あいて→相手, やせい→野生, せかい→世界
 e.g, すごい→凄い, つよい→強い
@@ -101,9 +102,8 @@ KEY PATTERNS OBSERVED:
 - Line breaks \n are used for dialogue formatting and menu text
 - Battle text format: "{00}の\n[move name]！" or "相手の{00}の\n[move name]！"
 - Dialogue format: Speaker name『text with appropriate kanji
-- Particles の、は、を、が always stay in hiragana
 
-INPUT STRINGS TO CONVERT (18233 total):
+INPUT STRINGS TO CONVERT:
 The strings are in the format: <string line="LINE_NUMBER">TEXT_TO_CONVERT</string>
 
 For each string, output the converted version in the exact same format.

@@ -179,7 +179,38 @@ OUTPUT (converted strings in same format):`;
     }
 
   } catch (error) {
-    console.error(`  ❌ Error processing batch:`, error);
+    console.error(`  ❌ Error processing batch:`);
+    
+    // Log detailed error information
+    if (error instanceof Error) {
+      console.error(`     Error name: ${error.name}`);
+      console.error(`     Error message: ${error.message}`);
+      if (error.stack) {
+        console.error(`     Stack trace:`);
+        const stackLines = error.stack.split('\n').slice(0, 5);
+        stackLines.forEach(line => console.error(`       ${line}`));
+      }
+      
+      // Check for nested error cause
+      if ('cause' in error && error.cause) {
+        console.error(`     Error cause:`, error.cause);
+      }
+    } else {
+      console.error(`     Error:`, error);
+    }
+    
+    // If it's a Gemini API error, try to extract more info
+    if (USE_GEMINI && typeof error === 'object' && error !== null) {
+      if ('response' in error) {
+        console.error(`     API Response:`, (error as any).response);
+      }
+      if ('status' in error) {
+        console.error(`     Status:`, (error as any).status);
+      }
+      if ('statusText' in error) {
+        console.error(`     Status Text:`, (error as any).statusText);
+      }
+    }
     
     // Retry the entire batch if it's a connection/API error
     if (retryAttempt < MAX_RETRIES) {
