@@ -1,0 +1,120 @@
+You are a Japanese localization expert converting Pokemon Diamond/Pearl text from Kana to Kanji.
+
+CRITICAL RULES - MUST FOLLOW EXACTLY:
+1. Preserve ALL variables exactly: {00}, {01}, {02}, etc. must stay in the EXACT same positions
+2. Preserve ALL line breaks exactly: \n must stay in the EXACT same positions  
+3. Preserve ALL punctuation exactly: ！、。？ etc.
+4. Preserve speaker names at the start: コウキ『, ナナカマド『, etc.
+5. Keep Pokemon names in katakana: ピカチュウ, イーブイ, ポケモン, etc.
+6. Keep move/ability names in katakana unless they have official kanji versions
+7. Keep particles in hiragana: の, は, を, が, に, へ, と, で, も, や, か
+8. Convert all other common words to kanji if they're commonly written in kanji: 
+e.g, つかう→使う, いく→行く, みる→見る, くる→来る
+e.g, あいて→相手, やせい→野生, せかい→世界
+e.g, すごい→凄い, つよい→強い
+
+VERIFIED EXAMPLES FROM THIS GAME (Kana → Kanji):
+
+Example 1:
+BEFORE: うちゅうがまだないころに\nさいしょにうまれたポケモンと\nしんわのなかでかたられている。
+AFTER:  宇宙がまだないころに\n最初に生まれたポケモンと\n神話の中で語られている。
+
+Example 2:
+BEFORE: {00}は\nちょうしをとりもどした！
+AFTER:  {00}は\n調子を取り戻した！
+
+Example 3:
+BEFORE: ぼんやりしているヤドランだが\nシェルダ－がつよくしっぽを\nかむときなにかがひらめくらしい。
+AFTER:  ぼんやりしているヤドランだが\nシェルダ－が強くしっぽを\nかむときなにかがひらめくらしい。
+
+Example 4:
+BEFORE: あいての{00}の\nねがいごとがかなった！
+AFTER:  相手の{00}の\nねがいごとがかなった！
+
+Example 5:
+BEFORE: わたしたちとたたかうなら\nもっとポケモンもってきてね
+AFTER:  わたしたちと戦うなら\n持っとポケモンもってきてね
+
+Example 6:
+BEFORE: ちょうおんぱのなきごえをもつ。\nふわふわとうかびかぜにのって\nながいきょりをたびする。
+AFTER:  超音波乗鳴き声を持つ。\nふわふわと浮かび風にのって\n長い距離を旅する。
+
+Example 7:
+BEFORE: なに！ジムバッジがそんなに！\nそりゃつよいはずだよ⋯⋯\n
+AFTER:  なに！ジムバッジがそんなに！\nそりゃ強いはずだよ⋯⋯\n
+
+Example 8:
+BEFORE: あいての{00}の\nでんげきは！
+AFTER:  相手の{00}の\nでんげきは！
+
+Example 9:
+BEFORE: {00}はこうげきを\nこらえた！
+AFTER:  {00}は攻撃を\nこらえた！
+
+Example 10:
+BEFORE: つよいあいてをもとめて\nそれがあたしのたびのりゆう\n\n
+AFTER:  強い相手を求めて\nそれがあたしの旅の理由\n\n
+
+Example 11:
+BEFORE: いまはロックなきぶんですね\n\n
+AFTER:  今はロックな気分ですね\n\n
+
+Example 12:
+BEFORE: {00}かいあたった！
+AFTER:  {00}回当たった！
+
+Example 13:
+BEFORE: どうくつのなかだと\nそらをとぶをつかえないのよね\n
+AFTER:  洞窟の中だと\nそらをとぶを使えないのよね\n
+
+Example 14:
+BEFORE: {00}は\nパソコンをチェックした！\n\nいわゆるせんもんようごとか\nがくじゅつようごとか\n\nむずかしいことがかきつらねてある
+AFTER:  {00}は\nパソコンをチェックした！\n\nいわゆる専門用語と書\n学術用語とか\n\nむずかしいことがかき連ねてある
+
+Example 15:
+BEFORE: なにかのきねんのしなとして\nとくべつにつくられた\nかなりめずらしいボ－ル。
+AFTER:  なにかの記念の品として\n特別につくられた\nかなり珍しいボ－ル。
+
+Example 16:
+BEFORE: ミオシティふなつきば
+AFTER:  ミオシティ船着き場
+
+Example 17:
+BEFORE: もたせるとおなじわざをれんぞくで\nつかったときいりょくがあがる。\nやめるといりょくはもどる。
+AFTER:  持たせると同じ技を連続で\n使ったとき威力があがる。\nやめると威力はもどる。
+
+Example 18:
+BEFORE: {00}は\nあまえためでこちらをみている！
+AFTER:  {00}は\n甘えた目でこちらを見ている！
+
+Example 19:
+BEFORE: いろんなところにいってるから\nいろんなことをしってるよ！\n\n
+AFTER:  行ろんなところにいってるから\nいろんなことを知ってるよ！\n\n
+
+Example 20:
+BEFORE: わたしがまけるなんて⋯⋯
+AFTER:  わたしが負けるなんて⋯⋯
+
+
+KEY PATTERNS OBSERVED:
+- Variables {00} represent Pokemon names, trainer names, or other dynamic content
+- Line breaks \n are used for dialogue formatting and menu text
+- Battle text format: "{00}の\n[move name]！" or "相手の{00}の\n[move name]！"
+- Dialogue format: Speaker name『text with appropriate kanji
+- Particles の、は、を、が always stay in hiragana
+
+INPUT STRINGS TO CONVERT (18233 total):
+The strings are in the format: <string line="LINE_NUMBER">TEXT_TO_CONVERT</string>
+
+For each string, output the converted version in the exact same format.
+IMPORTANT: Keep the line="NUMBER" attribute exactly as-is for tracking purposes.
+
+OUTPUT FORMAT:
+<string line="123">Converted text here</string>
+
+Remember:
+- If uncertain about a word, keep it in kana rather than guessing wrong kanji
+- Match the style and tone of the examples provided
+- This is official Pokemon game text, so maintain consistency with Pokemon terminology
+
+BEGIN CONVERSION:

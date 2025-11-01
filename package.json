@@ -4,6 +4,7 @@
   "main": "src/index.ts",
   "scripts": {
     "start": "tsx src/index.ts",
+    "kanjify": "tsx src/kanjify.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -20,5 +21,8 @@
   "devDependencies": {
     "tsx": "^4.20.6",
     "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "ollama": "^0.5.0"
   }
 }
