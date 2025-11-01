@@ -4,6 +4,10 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { Ollama } from 'ollama';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 // ES module compatibility
 const __filename = fileURLToPath(import.meta.url);
@@ -16,9 +20,15 @@ const PROMPT_TEMPLATE_PATH = path.join(__dirname, 'prompt_template.txt');
 
 // Configuration - check command line args
 const USE_GEMINI = process.argv.includes('--gemini');
+
+// Get API key from environment variable
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-if (!GEMINI_API_KEY) {
+
+// Only check for API key if using Gemini
+if (USE_GEMINI && !GEMINI_API_KEY) {
   console.error('Error: GEMINI_API_KEY environment variable is not set');
+  console.error('Please create a .env file with your API key or set it in your environment');
+  console.error('See env.example for the format');
   process.exit(1);
 }
 
@@ -238,6 +248,31 @@ async function main() {
   const systemPrompt = fs.readFileSync(PROMPT_TEMPLATE_PATH, 'utf-8');
   console.log(`  Loaded ${entries.length} strings to convert\n`);
 
+  // Deduplicate entries by text content (caching)
+  console.log('Step 2a: Deduplicating strings for efficient processing...');
+  const textToLineNums = new Map<string, number[]>();
+  
+  for (const entry of entries) {
+    if (!textToLineNums.has(entry.text)) {
+      textToLineNums.set(entry.text, []);
+    }
+    textToLineNums.get(entry.text)!.push(entry.lineNum);
+  }
+
+  // Create deduplicated entries (one per unique text)
+  const uniqueEntries: { lineNum: number, text: string }[] = [];
+  for (const [text, lineNums] of textToLineNums) {
+    uniqueEntries.push({
+      lineNum: lineNums[0], // Use first line number as representative
+      text: text
+    });
+  }
+
+  const duplicatesCount = entries.length - uniqueEntries.length;
+  console.log(`  Original strings: ${entries.length}`);
+  console.log(`  Unique strings: ${uniqueEntries.length}`);
+  console.log(`  Duplicates found: ${duplicatesCount} (${((duplicatesCount / entries.length) * 100).toFixed(1)}% reduction)\n`);
+
   // Check connection based on selected provider
   console.log(`Step 3: Checking ${USE_GEMINI ? 'Gemini' : 'Ollama'} connection...`);
   if (USE_GEMINI) {
@@ -270,15 +305,15 @@ async function main() {
   console.log('Step 4: Processing with LLM...');
   // Gemini has much larger context window (~1M tokens) vs Ollama's 32K
   const BATCH_SIZE = USE_GEMINI ? 500 : 200;
-  const allConversions = new Map<number, string>();
+  const uniqueConversions = new Map<number, string>(); // Maps representative lineNum -> converted text
 
-  const totalBatches = Math.ceil(entries.length / BATCH_SIZE);
+  const totalBatches = Math.ceil(uniqueEntries.length / BATCH_SIZE);
 
   // Rate limiting for Gemini (10 RPM = 6 second delay between requests)
   const GEMINI_DELAY_MS = USE_GEMINI ? 6000 : 0;
 
-  for (let i = 0; i < entries.length; i += BATCH_SIZE) {
-    const batch = entries.slice(i, Math.min(i + BATCH_SIZE, entries.length));
+  for (let i = 0; i < uniqueEntries.length; i += BATCH_SIZE) {
+    const batch = uniqueEntries.slice(i, Math.min(i + BATCH_SIZE, uniqueEntries.length));
     const batchNum = Math.floor(i / BATCH_SIZE) + 1;
 
     console.log(`\nBatch ${batchNum}/${totalBatches}:`);
@@ -286,10 +321,10 @@ async function main() {
 
     // Merge results
     for (const [lineNum, text] of conversions) {
-      allConversions.set(lineNum, text);
+      uniqueConversions.set(lineNum, text);
     }
 
-    console.log(`  Total converted so far: ${allConversions.size}/${entries.length}`);
+    console.log(`  Total unique strings converted so far: ${uniqueConversions.size}/${uniqueEntries.length}`);
 
     // Rate limiting for Gemini
     if (USE_GEMINI && batchNum < totalBatches) {
@@ -298,15 +333,38 @@ async function main() {
     }
   }
 
-  // Update XML file
+  // Expand conversions to all line numbers (apply cached results)
   console.log('\n' + '='.repeat(70));
+  console.log('Step 5: Applying cached conversions to all line numbers...');
+  const allConversions = new Map<number, string>();
+  
+  for (const [text, lineNums] of textToLineNums) {
+    // Find the converted text for this original text
+    const representativeEntry = uniqueEntries.find(e => e.text === text);
+    if (representativeEntry) {
+      const convertedText = uniqueConversions.get(representativeEntry.lineNum);
+      if (convertedText) {
+        // Apply to all line numbers that had this text
+        for (const lineNum of lineNums) {
+          allConversions.set(lineNum, convertedText);
+        }
+      }
+    }
+  }
+
+  console.log(`  Expanded ${uniqueConversions.size} unique conversions to ${allConversions.size} total line numbers\n`);
+
+  // Update XML file
+  console.log('='.repeat(70));
   updateXMLFile(allConversions);
 
   // Summary
   console.log('\n' + '='.repeat(70));
   console.log('CONVERSION COMPLETE');
   console.log('='.repeat(70));
-  console.log(`Total strings processed: ${entries.length}`);
+  console.log(`Total strings in input: ${entries.length}`);
+  console.log(`Unique strings processed: ${uniqueEntries.length}`);
+  console.log(`Duplicates cached: ${duplicatesCount}`);
   console.log(`Successfully converted: ${allConversions.size}`);
   console.log(`Conversion rate: ${((allConversions.size / entries.length) * 100).toFixed(2)}%`);
   console.log('='.repeat(70));

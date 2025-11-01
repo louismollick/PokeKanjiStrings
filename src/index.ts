@@ -2,6 +2,9 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { cleanSpecial } from './utils/cleanSpecial.js';
+import { normalizeForComparison } from './utils/normalizeForComparison.js';
+import { needsKanjification } from './utils/needsKanjification.js';
 
 // ES module compatibility
 const __filename = fileURLToPath(import.meta.url);
@@ -65,72 +68,6 @@ function parseTxtFile(filePath: string): string[] {
  */
 function containsKana(text: string): boolean {
   return /[\u3040-\u309F\u30A0-\u30FF]/.test(text);
-}
-
-/**
- * Normalize special characters
- */
-function cleanSpecial(text: string): string {
-  return text
-    .replaceAll('\u00A0', ' ')
-    .replaceAll('\u2007', ' ')
-    .replaceAll('\u202F', ' ')
-    .replaceAll('\u3000', ' ')
-    .replaceAll('"', '"')
-    .replaceAll('"', '"')
-    .replaceAll('\u2018', "'")
-    .replaceAll('\u2019', "'")
-    .replaceAll('ー', 'ー')
-    .replaceAll('－', 'ー')
-    .replaceAll('\u2010', 'ー')
-    .replaceAll('\u2013', 'ー')
-    .replaceAll('\u2014', 'ー')
-    .replaceAll('\u2015', 'ー')
-    .replaceAll('\u2212', 'ー')
-    .replaceAll('-', 'ー')
-    .replaceAll('º', '°')
-    .replaceAll('˚', '°')
-    .replaceAll('ᵒ', '°')
-    .replaceAll('〜', '～')
-    .replaceAll('‥', '..')
-    .replaceAll('…', '...')
-    .normalize();
-}
-
-/**
- * Normalize for comparison
- */
-function normalizeForComparison(text: string): string {
-  let normalized = text;
-
-  // Remove speaker names
-  normalized = normalized.replace(/^[ぁ-んァ-ヶー一-龯々〆〤]+『/g, '');
-
-  // Remove variables
-  normalized = normalized.replace(/\{[0-9A-F]{2}\}/gi, '');
-  normalized = normalized.replace(/\[VAR\s+[^\]]+\]/gi, '');
-
-  // Remove control characters and line breaks
-  normalized = normalized.replace(/\\c/g, '');
-  normalized = normalized.replace(/\\r/g, '');
-  normalized = normalized.replace(/\\n/g, '');
-  normalized = normalized.replace(/\n/g, '');
-  normalized = normalized.replace(/\r/g, '');
-
-  // Normalize ellipsis
-  normalized = normalized.replace(/⋯/g, '…');
-  normalized = normalized.replace(/……/g, '…');
-
-  // Remove punctuation
-  normalized = normalized.replace(/[！!？?。、，,.；;：:（）\(\)「」『』【】\[\]]/g, '');
-
-  // Clean special chars
-  normalized = cleanSpecial(normalized);
-
-  // Remove all whitespace
-  normalized = normalized.replace(/\s+/g, '');
-
-  return normalized.trim();
 }
 
 /**
@@ -247,37 +184,6 @@ function computeDiff(kana: string, kanji: string): DiffSegment[] {
   }
 
   return merged;
-}
-
-/**
- * Check if string needs kanji-ification
- * Returns false if string is mostly katakana, punctuation, or roman letters
- */
-function needsKanjification(text: string): boolean {
-  const normalized = normalizeForComparison(text);
-
-  if (normalized.length < 3) return false;
-
-  // Count character types
-  const hiragana = (normalized.match(/[ぁ-ん]/g) || []).length;
-  const katakana = (normalized.match(/[ァ-ヶ]/g) || []).length;
-  const kanji = (normalized.match(/[一-龯々]/g) || []).length;
-  const roman = (normalized.match(/[a-zA-Z0-9]/g) || []).length;
-  const total = normalized.length;
-
-  // Skip if mostly katakana (Pokemon names, moves)
-  if (katakana / total > 0.8) return false;
-
-  // Skip if mostly roman letters (codes, abbreviations)
-  if (roman / total > 0.5) return false;
-
-  // Skip if already mostly kanji
-  if (kanji / total > 0.5) return false;
-
-  // Skip if very little hiragana (nothing to convert)
-  if (hiragana < 3) return false;
-
-  return true;
 }
 
 /**
